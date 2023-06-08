@@ -5,6 +5,7 @@ const QueryTypes = require('../../query-types');
 const sequelizeErrors = require('../../errors');
 const _ = require('lodash');
 const { logger } = require('../../utils/logger');
+const { isStoreIndex } = require('./cockroach-db');
 
 const debug = logger.debugContext('sql:pg');
 
@@ -147,7 +148,8 @@ class Query extends AbstractQuery {
     }
 
     if (this.isShowIndexesQuery()) {
-      for (const row of rows) {
+      const pgIndexRows = rows.filter(row=>!isStoreIndex(row.definition));
+      for (const row of pgIndexRows) {
         const attributes = /ON .*? (?:USING .*?\s)?\(([^]*)\)/gi.exec(row.definition)[1].split(',');
 
         // Map column index in table to column name
