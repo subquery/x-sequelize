@@ -900,10 +900,42 @@ class PostgresQueryGenerator extends AbstractQueryGenerator {
    * @param {string} schemaName
    */
   getForeignKeyReferencesQuery(tableName, catalogName, schemaName) {
-    return `${this._getForeignKeyReferencesQueryPrefix()
-    }WHERE constraint_type = 'FOREIGN KEY' AND tc.table_name = '${tableName}'${
-      catalogName ? ` AND tc.table_catalog = '${catalogName}'` : ''
-    }${schemaName ? ` AND tc.table_schema = '${schemaName}'` : ''}`;
+
+    let whereConditions = `constraint_type = 'FOREIGN KEY' and tc.table_name = '${tableName}'`;
+    if (catalogName) {
+      whereConditions = `${whereConditions } and tc.table_catalog = '${catalogName}'`;
+    }
+    if (schemaName) {
+      whereConditions = `${whereConditions } and tc.table_schema = '${schemaName}'`;
+    }
+
+    return `
+    with a as (
+        select
+            distinct tc.constraint_name as constraint_name,
+            tc.constraint_schema as constraint_schema,
+            tc.constraint_catalog as constraint_catalog,
+            tc.table_name as table_name,
+            tc.table_schema as table_schema,
+            tc.table_catalog as table_catalog,
+            tc.initially_deferred as initially_deferred,
+            tc.is_deferrable as is_deferrable,
+            kcu.column_name as column_name
+        from
+            information_schema.table_constraints as tc
+        join information_schema.key_column_usage as kcu on
+            tc.constraint_name = kcu.constraint_name
+        where
+            ${whereConditions}
+    )
+    select *,
+        ccu.table_schema as referenced_table_schema,
+        ccu.table_catalog as referenced_table_catalog,
+        ccu.table_name as referenced_table_name,
+        ccu.column_name as referenced_column_name
+    from a
+    join information_schema.constraint_column_usage as ccu on ccu.constraint_name = a.constraint_name;
+`;
   }
 
   getForeignKeyReferenceQuery(table, columnName) {
